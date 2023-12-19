@@ -1,4 +1,6 @@
-module go-bxa
+module Module
+
+// Module file for Go.
 
 go 1.17
 
