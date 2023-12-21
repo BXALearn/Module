@@ -1,161 +1,223 @@
 package main
 
 import (
-	"bufio"
-	"database/sql"
 	"fmt"
-	"os"
-
-	_ "github.com/go-sql-driver/mysql"
+	"math/rand"
+	"sort"
+	"time"
 )
 
 const (
-	boardSize = 16  // 棋盘大小
-	emptyCell = "-" // 空棋子
-	playerX   = "X" // 玩家X的棋子
-	playerO   = "O" // 玩家O的棋子
+	Empty     = 0
+	Player1   = 1
+	Player2   = 2
+	BoardSize = 15
 )
 
-func main() {
-	// 创建新的实例
-	game := NewGame()
-	// 创建扫描器用于读取标准输入
-	scanner := bufio.NewScanner(os.Stdin)
+type Gobang struct {
+	board       [][]int
+	currentTurn int
+}
 
-	game.saveBoard() // 保存棋盘状态
+func NewGobang() *Gobang {
+	board := make([][]int, BoardSize)
+	for i := range board {
+		board[i] = make([]int, BoardSize)
+	}
+	return &Gobang{
+		board:       board,
+		currentTurn: Player1,
+	}
+}
 
-	for {
-		game.printBoard() // 打印当前棋盘状态
-		fmt.Printf("玩家%s的回合，请输入行和列 7 7 : ", game.player)
-
-		var row, col int
-		if scanner.Scan() {
-			_, err := fmt.Sscanf(scanner.Text(), "%d %d", &row, &col) // 从扫描结果中解析出行和列
-			if err != nil {
-				fmt.Println("无效的输入，请输入行和列数。")
-				continue
+func (g *Gobang) PrintBoard() {
+	for _, row := range g.board {
+		for _, cell := range row {
+			switch cell {
+			case Empty:
+				fmt.Print("- ")
+			case Player1:
+				fmt.Print("X ")
+			case Player2:
+				fmt.Print("O ")
 			}
-		}
-
-		if game.makeMove(row, col) { // 进行移动操作
-			if game.checkWin(row, col) { // 检查是否获胜
-				game.printBoard() // 打印棋盘状态
-				fmt.Printf("玩家%s获胜！\n", game.player)
-				break // 结束游戏
-			}
-
-			game.switchPlayer() // 切换玩家
-		} else {
-			fmt.Println("无效的移动，请重试。")
-		}
-	}
-}
-
-type Module struct {
-	// 棋盘数组
-	board  [boardSize][boardSize]string
-	player string // 当前玩家
-}
-
-func NewGame() *Module {
-	// 创建新实例
-	game := &Module{player: playerX}
-	for i := 1; i < boardSize; i++ {
-		for j := 1; j < boardSize; j++ {
-			// 初始化棋盘
-			game.board[i][j] = emptyCell
-		}
-	}
-	return game
-}
-
-func (g *Module) saveBoard() {
-	// 连接数据库
-	db, err := sql.Open("mysql", "root:123456@tcp(127.0.0.1:3306)/module")
-	if err != nil {
-		panic(err.Error())
-	}
-	defer db.Close()
-
-	// 执行插入操作
-	insertStmt, err := db.Prepare("INSERT INTO board (board_info) VALUES (?)")
-	if err != nil {
-		panic(err.Error())
-	}
-	defer insertStmt.Close()
-
-	_, err = insertStmt.Exec("value1") // 执行插入操作
-	if err != nil {
-		panic(err.Error())
-	}
-}
-
-func (g *Module) printBoard() {
-	fmt.Print("  ")
-	for i := 1; i < boardSize; i++ {
-		// 打印横行
-		fmt.Printf("%2d ", i)
-	}
-	fmt.Println()
-
-	for i := 1; i < boardSize; i++ {
-		// 打印纵列
-		fmt.Printf("%2d ", i)
-		for j := 1; j < boardSize; j++ {
-			// 打印棋盘上的棋子
-			fmt.Printf("%2s ", g.board[i][j])
 		}
 		fmt.Println()
 	}
 }
 
-func (g *Module) makeMove(row, col int) bool {
-	// 判断移动是否有效
-	if row < 1 || row >= boardSize || col < 1 || col >= boardSize || g.board[row][col] != emptyCell {
+func (g *Gobang) MakeMove(row, col int) bool {
+	if row < 0 || row >= BoardSize || col < 0 || col >= BoardSize || g.board[row][col] != Empty {
 		return false
 	}
-	// 在棋盘上放置棋子
-	g.board[row][col] = g.player
+
+	g.board[row][col] = g.currentTurn
+	g.currentTurn = 3 - g.currentTurn
 	return true
 }
 
-func (g *Module) switchPlayer() {
-	if g.player == playerX {
-		g.player = playerO
-	} else {
-		g.player = playerX
+func (g *Gobang) IsGameOver() bool {
+	return g.checkWin() || g.isBoardFull()
+}
+
+func (g *Gobang) checkWin() bool {
+	for row := 0; row < BoardSize; row++ {
+		for col := 0; col < BoardSize; col++ {
+			if g.board[row][col] != Empty {
+				if g.checkDirection(row, col, 1, 0) || // 水平方向
+					g.checkDirection(row, col, 0, 1) || // 垂直方向
+					g.checkDirection(row, col, 1, 1) || // 正斜方向
+					g.checkDirection(row, col, 1, -1) { // 反斜方向
+					return true
+				}
+			}
+		}
 	}
+	return false
 }
 
-func (g *Module) checkWin(row, col int) bool {
-	// 校验落子位置
-	return g.checkDirection(row, col, 0, 1) || // 横向
-		g.checkDirection(row, col, 1, 0) || // 纵向
-		g.checkDirection(row, col, 1, 1) || // 斜向 \
-		g.checkDirection(row, col, 1, -1) // 斜向 /
-}
-
-func (g *Module) checkDirection(row, col, dr, dc int) bool {
+func (g *Gobang) checkDirection(row, col, dx, dy int) bool {
+	player := g.board[row][col]
 	count := 1
-	for i := 1; i <= 4; i++ {
-		r := row + i*dr
-		c := col + i*dc
-		if r < 1 || r >= boardSize || c < 1 || c >= boardSize || g.board[row][col] != g.board[r][c] {
-			break
-		}
-		count++
-	}
 
 	for i := 1; i <= 4; i++ {
-		r := row - i*dr
-		c := col - i*dc
+		nr := row + dx*i
+		nc := col + dy*i
 
-		if r < 1 || r >= boardSize || c < 1 || c >= boardSize || g.board[row][col] != g.board[r][c] {
+		if nr < 0 || nr >= BoardSize || nc < 0 || nc >= BoardSize || g.board[nr][nc] != player {
 			break
 		}
 
 		count++
 	}
 
-	return count >= 5
+	return count == 5
+}
+
+func (g *Gobang) isBoardFull() bool {
+	for _, row := range g.board {
+		for _, cell := range row {
+			if cell == Empty {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func main() {
+	g := NewGobang()
+	rand.Seed(time.Now().UnixNano())
+
+	fmt.Println("欢迎来到Gobang游戏！")
+	fmt.Println("请选择游戏模式：")
+	fmt.Println("1. 玩家对战")
+	fmt.Println("2. 人机对战")
+
+	var mode int
+	fmt.Scanln(&mode)
+
+	switch mode {
+	case 1:
+		fmt.Println("玩家对战模式")
+		for !g.IsGameOver() {
+			g.PrintBoard()
+			fmt.Printf("轮到玩家%d下棋，请输入行和列号（以空格分隔）：", g.currentTurn)
+			var row, col int
+			fmt.Scanln(&row, &col)
+			if !g.MakeMove(row, col) {
+				fmt.Println("无效的位置，请重新输入！")
+			}
+		}
+	case 2:
+		fmt.Println("人机对战模式")
+		for !g.IsGameOver() {
+			g.PrintBoard()
+			if g.currentTurn == Player1 {
+				fmt.Printf("轮到玩家%d下棋，请输入行和列号（以空格分隔）：", g.currentTurn)
+				var row, col int
+				fmt.Scanln(&row, &col)
+				if !g.MakeMove(row, col) {
+					fmt.Println("无效的位置，请重新输入！")
+				}
+			} else {
+				fmt.Println("轮到AI下棋...")
+				time.Sleep(1 * time.Second) // 模拟思考时间
+
+				row, col := g.generateAIMove()
+				g.MakeMove(row, col)
+				fmt.Printf("AI下棋在行%d，列%d\n", row, col)
+			}
+		}
+	}
+
+	g.PrintBoard()
+	fmt.Println("游戏结束！")
+}
+
+func (g *Gobang) generateAIMove() (int, int) {
+	advantageMap := make(map[int]int) // 记录每个空位的权重
+
+	// 遍历棋盘上的每个空位
+	for row := 0; row < BoardSize; row++ {
+		for col := 0; col < BoardSize; col++ {
+			if g.board[row][col] == Empty {
+				advantage := g.calculateAdvantage(row, col) // 计算权重
+				advantageMap[row*BoardSize+col] = advantage
+			}
+		}
+	}
+
+	// 根据权重降序排序
+	sortedPositions := make([]int, 0, len(advantageMap))
+	for position := range advantageMap {
+		sortedPositions = append(sortedPositions, position)
+	}
+	sort.Slice(sortedPositions, func(i, j int) bool {
+		return advantageMap[sortedPositions[i]] > advantageMap[sortedPositions[j]]
+	})
+
+	// 选择权重最高的位置进行下棋
+	for _, position := range sortedPositions {
+		row := position / BoardSize
+		col := position % BoardSize
+		if g.board[row][col] == Empty {
+			return row, col
+		}
+	}
+
+	// 如果没有合适的位置，则随机选择一个空位置下棋
+	return g.getRandomEmptyPosition()
+}
+
+func (g *Gobang) calculateAdvantage(row, col int) int {
+	advantage := 0
+
+	// 遍历附近三格
+	for dr := -1; dr <= 1; dr++ {
+		for dc := -1; dc <= 1; dc++ {
+			nr := row + dr
+			nc := col + dc
+
+			// 判断是否在边界内
+			if nr >= 0 && nr < BoardSize && nc >= 0 && nc < BoardSize {
+				// 判断是否为敌方棋子
+				if g.board[nr][nc] == 3-g.currentTurn {
+					advantage++
+				}
+			}
+		}
+	}
+
+	return advantage
+}
+
+func (g *Gobang) getRandomEmptyPosition() (int, int) {
+	for {
+		row := rand.Intn(BoardSize)
+		col := rand.Intn(BoardSize)
+		if g.board[row][col] == Empty {
+			return row, col
+		}
+	}
 }
