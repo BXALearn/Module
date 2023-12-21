@@ -10,7 +10,7 @@ const (
 	dataSourceName = "root:123456@tcp(127.0.0.1:3306)/module"
 )
 
-func (g *Module) saveBoard() {
+func (g *Gobang) saveBoard() {
 	// 连接数据库
 	db, err := sql.Open(driverName, dataSourceName)
 	if err != nil {
