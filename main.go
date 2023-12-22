@@ -109,14 +109,15 @@ func main() {
 	g := NewGobang()
 	rand.Seed(time.Now().UnixNano())
 
-	fmt.Println("欢迎来到Gobang游戏！")
-	fmt.Println("请选择游戏模式：")
-	fmt.Println("1. 玩家对战")
-	fmt.Println("2. 人机对战")
+	// 隐藏模式选择
+	//fmt.Println("欢迎来到Gobang游戏！")
+	//fmt.Println("请选择游戏模式：")
+	//fmt.Println("1. 玩家对战")
+	//fmt.Println("2. 人机对战")
+	//var mode int
+	//fmt.Scanln(&mode)
 
-	var mode int
-	fmt.Scanln(&mode)
-
+	mode := 2
 	switch mode {
 	case 1:
 		fmt.Println("玩家对战模式")
@@ -134,19 +135,19 @@ func main() {
 		for !g.IsGameOver() {
 			g.PrintBoard()
 			if g.currentTurn == Player1 {
-				fmt.Printf("轮到玩家%d下棋，请输入行和列号（以空格分隔）：", g.currentTurn)
-				var row, col int
-				fmt.Scanln(&row, &col)
-				if !g.MakeMove(row, col) {
-					fmt.Println("无效的位置，请重新输入！")
-				}
-			} else {
 				fmt.Println("轮到AI下棋...")
 				time.Sleep(1 * time.Second) // 模拟思考时间
 
 				row, col := g.generateAIMove()
 				g.MakeMove(row, col)
 				fmt.Printf("AI下棋在行%d，列%d\n", row, col)
+			} else {
+				fmt.Printf("轮到玩家%d下棋，请输入行和列号（以空格分隔）：", g.currentTurn)
+				var row, col int
+				fmt.Scanln(&row, &col)
+				if !g.MakeMove(row, col) {
+					fmt.Println("无效的位置，请重新输入！")
+				}
 			}
 		}
 	}
